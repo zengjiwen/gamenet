@@ -1,99 +1,128 @@
 package server
 
 import (
-	"errors"
 	"gamenet"
-	"gamenet/conn"
 	"net"
 	"sync"
+	"time"
+)
+
+const (
+	_broadcastBacklog = 50
 )
 
 type tcpServer struct {
 	addr string
-
 	ln   net.Listener
-	lnWG sync.WaitGroup
 
-	tcpConnsMU sync.Mutex
-	tcpConns   map[*conn.TCPConn]struct{}
+	tcpConnsMu sync.Mutex
+	tcpConns   map[*tcpConn]struct{}
 
-	handler gamenet.EventHandler
+	groupsMu sync.Mutex
+	groups   map[string]map[*tcpConn]struct{}
+
+	handler       gamenet.EventHandler
+	broadcastChan chan []byte
+
+	eventChan chan func()
 }
 
-func NewTCPServer(addr string, handler gamenet.EventHandler) *tcpServer {
+func newTCPServer(addr string, handler gamenet.EventHandler, eventChan chan func()) *tcpServer {
 	ts := &tcpServer{
-		addr: addr,
+		addr:          addr,
+		tcpConns:      make(map[*tcpConn]struct{}),
+		groups:        make(map[string]map[*tcpConn]struct{}),
+		handler:       handler,
+		broadcastChan: make(chan []byte, _broadcastBacklog),
+		eventChan:     eventChan,
 	}
-
-	ts.handler = handler
 	return ts
 }
 
-func (ts *tcpServer) Start() {
+func (ts *tcpServer) ListenAndServe() error {
 	ln, err := net.Listen("TCP", "127.0.0.1:0")
 	if err != nil {
-		return
+		return err
 	}
 
-	ts.lnWG.Add(1)
-	go ts.accepting(ln)
+	go ts.broadcastLoop()
+	return ts.serve(ln)
 }
 
-func (ts *tcpServer) accepting(ln net.Listener) {
-	defer ts.lnWG.Done()
+func (ts *tcpServer) broadcastLoop() {
+	for data := range ts.broadcastChan {
+		ts.tcpConnsMu.Lock()
+		for conn := range ts.tcpConns {
+			conn.Send(data)
+		}
+		ts.tcpConnsMu.Unlock()
+	}
+}
 
+func (ts *tcpServer) serve(ln net.Listener) error {
+	ts.ln = ln
+
+	var tempDelay time.Duration
 	for {
 		c, err := ln.Accept()
 		if err != nil {
-			if isTimeoutError(err) {
+			if netErr, ok := err.(net.Error); ok && netErr.Temporary() {
+				if tempDelay == 0 {
+					tempDelay = 5 * time.Millisecond
+				} else {
+					tempDelay *= 2
+				}
+				if max := 1 * time.Second; tempDelay > max {
+					tempDelay = max
+				}
+				time.Sleep(tempDelay)
 				continue
 			}
-			break
+			return err
 		}
 
-		go ts.serve(c)
+		tc := newTCPConn(c)
+		ts.tcpConnsMu.Lock()
+		ts.tcpConns[tc] = struct{}{}
+		ts.tcpConnsMu.Unlock()
+		go tc.serve()
 	}
 }
 
-func (ts *tcpServer) serve(c net.Conn) {
-	tc := conn.NewTCPSession(c)
-	ts.tcpConnsMU.Lock()
-	ts.tcpConns[tc] = struct{}{}
-	ts.tcpConnsMU.Unlock()
+func (ts *tcpServer) Shutdown() error {
+	if ts.ln != nil {
+		if err := ts.ln.Close(); err != nil {
+			return err
+		}
+	}
 
-	go func() {
-		defer func() {
-			ts.tcpConnsMU.Lock()
-			delete(ts.tcpConns, tc)
-			ts.tcpConnsMU.Unlock()
-		}()
-		tc.WriteLoop(ts.handler)
-	}()
-
-	tc.ReadLoop(ts.handler)
-}
-
-func (ts *tcpServer) Stop() {
-	ts.ln.Close()
-	ts.lnWG.Wait()
-
-	ts.tcpConnsMU.Lock()
+	ts.tcpConnsMu.Lock()
 	for tc := range ts.tcpConns {
 		tc.Close()
 	}
 	ts.tcpConns = nil
-	ts.tcpConnsMU.Unlock()
+	ts.tcpConnsMu.Unlock()
+	close(ts.broadcastChan)
+	return nil
 }
 
-func isTimeoutError(err error) bool {
-	if err == nil {
-		return false
+func (ts *tcpServer) Broadcast(data []byte) {
+	defer func() {
+		recover()
+	}()
+	ts.broadcastChan <- data
+}
+
+func (ts *tcpServer) Multicast(groupName string, data []byte) {
+	ts.groupsMu.Lock()
+	defer ts.groupsMu.Unlock()
+
+	group, ok := ts.groups[groupName]
+	if !ok {
+		return
 	}
 
-	var netErr net.Error
-	if !errors.As(err, &netErr) {
-		return false
+	for conn := range group {
+		conn.Send(data)
 	}
-
-	return netErr.Timeout()
 }

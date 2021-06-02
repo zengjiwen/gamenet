@@ -3,18 +3,19 @@ package main
 import (
 	"fmt"
 	"gamenet"
+	"gamenet/server"
 	"os"
 	"os/signal"
 )
 
 func main() {
-	server := gamenet.NewServer("TCP", "127.0.0.1:0", &echoHandler{})
-	server.Start()
+	tcpServer := server.NewServer("tcp", "127.0.0.1:0", &echoHandler{})
+	go tcpServer.ListenAndServe()
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, os.Kill)
 	<-c
-	server.Stop()
+	tcpServer.Shutdown()
 }
 
 type echoHandler struct {
@@ -28,7 +29,7 @@ func (sc *echoHandler) OnConnClosed(c gamenet.Conn) {
 	fmt.Println("OnConnClosed")
 }
 
-func (sc *echoHandler) OnRecv(c gamenet.Conn, p []byte) {
+func (sc *echoHandler) OnRecv(c gamenet.Conn, p *server.Packet) {
 	fmt.Printf("OnRecv: %s", p)
-	c.Send(p)
+	c.Send(p.Data())
 }

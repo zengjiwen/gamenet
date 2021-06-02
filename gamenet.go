@@ -1,36 +1,26 @@
 package gamenet
 
-import (
-	"fmt"
-	"gamenet/server"
-)
+import "gamenet/server"
 
 type Server interface {
-	Start()
-	Stop()
-}
-
-func NewServer(network, addr string, handler EventHandler) Server {
-	if network == "TCP" {
-		return server.NewTCPServer(addr, handler)
-	}
-
-	panic(fmt.Errorf("wrong network: %s", network))
+	ListenAndServe() error
+	Shutdown() error
+	Broadcast(data []byte)
+	Multicast(groupName string, data []byte)
 }
 
 type Conn interface {
-	Send(p []byte)
-	Close()
+	Send(data []byte)
+	Close() error
+	AddToGroup(groupName string)
+	RemoveFromGroup(groupName string)
 }
 
 type EventHandler interface {
 	OnNewConn(c Conn)
 	OnConnClosed(c Conn)
-	OnRecv(c Conn, p []byte)
+	OnRecv(c Conn, p *server.Packet)
 }
 
 type Message struct {
-}
-
-type Packet struct {
 }
