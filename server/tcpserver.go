@@ -24,17 +24,19 @@ type tcpServer struct {
 	handler       gamenet.EventHandler
 	broadcastChan chan []byte
 
-	eventChan chan func()
+	opts options
 }
 
-func newTCPServer(addr string, handler gamenet.EventHandler, eventChan chan func()) *tcpServer {
+func newTCPServer(addr string, handler gamenet.EventHandler, applies ...func(opts *options)) *tcpServer {
 	ts := &tcpServer{
 		addr:          addr,
 		tcpConns:      make(map[*tcpConn]struct{}),
 		groups:        make(map[string]map[*tcpConn]struct{}),
 		handler:       handler,
 		broadcastChan: make(chan []byte, _broadcastBacklog),
-		eventChan:     eventChan,
+	}
+	for _, apply := range applies {
+		apply(&ts.opts)
 	}
 	return ts
 }

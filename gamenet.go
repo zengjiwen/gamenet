@@ -1,6 +1,8 @@
 package gamenet
 
-import "gamenet/server"
+import (
+	"gamenet/server"
+)
 
 type Server interface {
 	ListenAndServe() error
@@ -14,13 +16,22 @@ type Conn interface {
 	Close() error
 	AddToGroup(groupName string)
 	RemoveFromGroup(groupName string)
+	SetUserData(userData interface{})
+	UserData() interface{}
 }
 
 type EventHandler interface {
 	OnNewConn(c Conn)
 	OnConnClosed(c Conn)
-	OnRecv(c Conn, p *server.Packet)
+	OnRecvPacket(c Conn, p *server.Packet)
 }
 
-type Message struct {
+type Codec interface {
+	Encode(data []byte) (*server.Packet, error)
+	Decode(p *server.Packet) ([]byte, error)
+}
+
+type Marshaler interface {
+	Marshal(message interface{}) ([]byte, error)
+	Unmarshal(buf []byte, message interface{}) error
 }

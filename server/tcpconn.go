@@ -19,7 +19,7 @@ const (
 	_minDataCap = 128
 	_dataShift  = 2
 	_maxDataCap = 32 * 1024 * 1024
-	_headLen    = 4 // _payloadLengthSize is the packet size field size
+	_headLen    = 4
 )
 
 var (
@@ -63,6 +63,8 @@ type tcpConn struct {
 	sendChan chan []byte
 	closing  int32
 	dieChan  chan struct{}
+
+	userData interface{}
 }
 
 func newTCPConn(c net.Conn) *tcpConn {
@@ -176,8 +178,8 @@ func (tc *tcpConn) writeLoop() {
 		putBufw(tc.bufw)
 		close(tc.dieChan)
 		tc.conn.Close()
-		if tc.server.eventChan != nil {
-			tc.server.eventChan <- func() {
+		if tc.server.opts.eventChan != nil {
+			tc.server.opts.eventChan <- func() {
 				tc.server.handler.OnConnClosed(tc)
 			}
 		} else {
@@ -220,8 +222,8 @@ func (tc *tcpConn) readLoop() {
 		tc.sendChan <- nil
 	}()
 
-	if tc.server.eventChan != nil {
-		tc.server.eventChan <- func() {
+	if tc.server.opts.eventChan != nil {
+		tc.server.opts.eventChan <- func() {
 			tc.server.handler.OnNewConn(tc)
 		}
 	} else {
@@ -241,12 +243,12 @@ func (tc *tcpConn) readLoop() {
 			return
 		}
 
-		if tc.server.eventChan != nil {
-			tc.server.eventChan <- func() {
-				tc.server.handler.OnRecv(tc, p)
+		if tc.server.opts.eventChan != nil {
+			tc.server.opts.eventChan <- func() {
+				tc.server.handler.OnRecvPacket(tc, p)
 			}
 		} else {
-			tc.server.handler.OnRecv(tc, p)
+			tc.server.handler.OnRecvPacket(tc, p)
 		}
 	}
 }
@@ -290,4 +292,12 @@ func (tc *tcpConn) RemoveFromGroup(groupName string) {
 	}
 
 	delete(group, tc)
+}
+
+func (tc *tcpConn) SetUserData(userData interface{}) {
+	tc.userData = userData
+}
+
+func (tc *tcpConn) UserData() interface{} {
+	return tc.userData
 }

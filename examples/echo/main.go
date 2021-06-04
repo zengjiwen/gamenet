@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	tcpServer := server.NewServer("tcp", "127.0.0.1:0", &echoHandler{})
+	tcpServer := server.NewServer("tcp", "127.0.0.1:0", &echoHandler{}, nil)
 	go tcpServer.ListenAndServe()
 
 	c := make(chan os.Signal, 1)
@@ -29,7 +29,7 @@ func (sc *echoHandler) OnConnClosed(c gamenet.Conn) {
 	fmt.Println("OnConnClosed")
 }
 
-func (sc *echoHandler) OnRecv(c gamenet.Conn, p *server.Packet) {
-	fmt.Printf("OnRecv: %s", p)
+func (sc *echoHandler) OnRecvPacket(c gamenet.Conn, p *server.Packet) {
+	fmt.Printf("OnRecvPacket: %s", p)
 	c.Send(p.Data())
 }
