@@ -27,8 +27,8 @@ var (
 	_bufwPool   = new(sync.Pool)
 	_packetPool = &sync.Pool{
 		New: func() interface{} {
-			p := new(Packet)
-			p.Reset()
+			p := new(packet)
+			p.reset()
 			return p
 		},
 	}
@@ -197,21 +197,51 @@ func (tc *tcpConn) writeLoop() {
 		tc.server.tcpConnsMu.Unlock()
 	}()
 
-	headBuf := make([]byte, _headLen)
-	for p := range tc.sendChan {
-		if p == nil {
-			return
-		}
+	var headBuf [_headLen]byte
+	var packetCount int
+	tickTime := time.Now()
+	flushTick := time.NewTicker(time.Millisecond)
+	var firstRecvTime, lastRecvTime time.Time
+	flushDelay := tc.server.opts.flushDelay
+	maxFlushDelay := tc.server.opts.maxFlushDelay
+	maxFlushPackets := tc.server.opts.maxFlushPackets
+	for {
+		select {
+		case p := <-tc.sendChan:
+			if p == nil {
+				return
+			}
 
-		binary.LittleEndian.PutUint32(headBuf, uint32(len(p)))
-		if err := writeFull(tc.bufw, headBuf); err != nil {
-			return
-		}
-		if err := writeFull(tc.bufw, p); err != nil {
-			return
-		}
-		if err := tc.bufw.Flush(); err != nil {
-			return
+			binary.LittleEndian.PutUint32(headBuf[:], uint32(len(p)))
+			if err := writeFull(tc.bufw, headBuf[:]); err != nil {
+				return
+			}
+			if err := writeFull(tc.bufw, p); err != nil {
+				return
+			}
+
+			lastRecvTime = tickTime
+			packetCount++
+			if packetCount == 1 {
+				firstRecvTime = tickTime
+			}
+		case tickTime = <-flushTick.C:
+			if packetCount == 0 {
+				continue
+			}
+
+			if packetCount >= maxFlushPackets {
+				packetCount = 0
+				if err := tc.bufw.Flush(); err != nil {
+					return
+				}
+			} else if tickTime.Sub(lastRecvTime) >= flushDelay*time.Millisecond ||
+				tickTime.Sub(firstRecvTime) >= maxFlushDelay*time.Millisecond {
+				packetCount = 0
+				if err := tc.bufw.Flush(); err != nil {
+					return
+				}
+			}
 		}
 	}
 }
@@ -229,26 +259,29 @@ func (tc *tcpConn) readLoop() {
 	} else {
 		tc.server.handler.OnNewConn(tc)
 	}
+
+	var head [_headLen]byte
 	for {
 		tc.conn.SetReadDeadline(time.Now().Add(_readTimeout))
 
-		var head [4]byte
 		if err := readFull(tc.bufr, head[:]); err != nil {
 			return
 		}
 
 		pLen := binary.LittleEndian.Uint32(head[:])
 		p := newPacket(int(pLen))
-		if err := readFull(tc.bufr, p.Data()); err != nil {
+		if err := readFull(tc.bufr, p.getData()); err != nil {
 			return
 		}
 
 		if tc.server.opts.eventChan != nil {
 			tc.server.opts.eventChan <- func() {
-				tc.server.handler.OnRecvPacket(tc, p)
+				tc.server.handler.OnRecvData(tc, p.getData())
+				p.release()
 			}
 		} else {
-			tc.server.handler.OnRecvPacket(tc, p)
+			tc.server.handler.OnRecvData(tc, p.getData())
+			p.release()
 		}
 	}
 }

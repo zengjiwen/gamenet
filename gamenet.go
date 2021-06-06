@@ -1,9 +1,5 @@
 package gamenet
 
-import (
-	"gamenet/server"
-)
-
 type Server interface {
 	ListenAndServe() error
 	Shutdown() error
@@ -23,15 +19,5 @@ type Conn interface {
 type EventHandler interface {
 	OnNewConn(c Conn)
 	OnConnClosed(c Conn)
-	OnRecvPacket(c Conn, p *server.Packet)
-}
-
-type Codec interface {
-	Encode(data []byte) (*server.Packet, error)
-	Decode(p *server.Packet) ([]byte, error)
-}
-
-type Marshaler interface {
-	Marshal(message interface{}) ([]byte, error)
-	Unmarshal(buf []byte, message interface{}) error
+	OnRecvData(c Conn, data []byte)
 }

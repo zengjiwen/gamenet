@@ -1,11 +1,12 @@
 package server
 
-import "gamenet"
+import "time"
 
 type options struct {
-	eventChan chan func()
-	codec     gamenet.Codec
-	marshaler gamenet.Marshaler
+	eventChan       chan func()
+	flushDelay      time.Duration
+	maxFlushDelay   time.Duration
+	maxFlushPackets int
 }
 
 func WithEventChan(eventChan chan func()) func(opts *options) {
@@ -14,14 +15,20 @@ func WithEventChan(eventChan chan func()) func(opts *options) {
 	}
 }
 
-func WithCodec(codec gamenet.Codec) func(opts *options) {
+func WithFlushDelay(flushDelay time.Duration) func(opts *options) {
 	return func(opts *options) {
-		opts.codec = codec
+		opts.flushDelay = flushDelay
 	}
 }
 
-func WithMarshaler(marshaler gamenet.Marshaler) func(opts *options) {
+func WithMaxFlushDelay(maxFlushDelay time.Duration) func(opts *options) {
 	return func(opts *options) {
-		opts.marshaler = marshaler
+		opts.maxFlushDelay = maxFlushDelay
+	}
+}
+
+func WithMaxFlushPackets(maxFlushPackets int) func(opts *options) {
+	return func(opts *options) {
+		opts.maxFlushPackets = maxFlushPackets
 	}
 }

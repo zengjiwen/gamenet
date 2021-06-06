@@ -2,22 +2,20 @@ package server
 
 import (
 	"fmt"
-	"runtime"
 )
 
-type Packet struct {
-	Type     int
+type packet struct {
 	Len      int
 	data     []byte
 	initData [_minDataCap]byte
 }
 
-func newPacket(len int) *Packet {
+func newPacket(len int) *packet {
 	if len > _maxDataCap {
 		panic(fmt.Errorf("packet len too large"))
 	}
 
-	p := _packetPool.Get().(*Packet)
+	p := _packetPool.Get().(*packet)
 	if len > _minDataCap {
 		for _, dataCap := range _packetDataCaps {
 			if dataCap >= len {
@@ -28,25 +26,24 @@ func newPacket(len int) *Packet {
 		p.data = _packetDataPools[_maxDataCap].Get().([]byte)
 	}
 	p.Len = len
-	runtime.SetFinalizer(p, (*Packet).release)
 	return p
 }
 
-func (p *Packet) Data() []byte {
+func (p *packet) getData() []byte {
 	return p.data[:p.Len]
 }
 
-func (p *Packet) release() {
+func (p *packet) release() {
 	dataCap := len(p.data)
 	if dataCap > _minDataCap {
 		_packetDataPools[dataCap].Put(p.data)
 	}
 
-	p.Reset()
+	p.reset()
 	_packetPool.Put(p)
 }
 
-func (p *Packet) Reset() {
+func (p *packet) reset() {
 	p.Len = 0
 	p.data = p.initData[:]
 }

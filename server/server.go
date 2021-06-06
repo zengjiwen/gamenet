@@ -6,11 +6,11 @@ import (
 	"strings"
 )
 
-func NewServer(network, addr string, handler gamenet.EventHandler, eventChan chan func()) gamenet.Server {
+func NewServer(network, addr string, handler gamenet.EventHandler, applies ...func(opts *options)) gamenet.Server {
 	network = strings.ToLower(network)
 	switch network {
 	case "tcp":
-		return newTCPServer(addr, handler, eventChan)
+		return newTCPServer(addr, handler, applies...)
 	default:
 		panic(fmt.Errorf("wrong network: %s", network))
 	}
