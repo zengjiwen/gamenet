@@ -2,7 +2,7 @@ package server
 
 import (
 	"fmt"
-	"gamenet"
+	"github.com/zengjiwen/gamenet"
 	"strings"
 )
 
