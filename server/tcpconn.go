@@ -67,8 +67,9 @@ type tcpConn struct {
 	userData interface{}
 }
 
-func newTCPConn(c net.Conn) *tcpConn {
+func newTCPConn(ts *tcpServer, c net.Conn) *tcpConn {
 	tc := &tcpConn{
+		server:   ts,
 		conn:     c,
 		bufr:     newBufr(c),
 		bufw:     newBufw(c),
@@ -180,17 +181,11 @@ func (tc *tcpConn) writeLoop() {
 		tc.conn.Close()
 		if tc.server.opts.eventChan != nil {
 			tc.server.opts.eventChan <- func() {
-				tc.server.handler.OnConnClosed(tc)
+				tc.server.callback.OnConnClosed(tc)
 			}
 		} else {
-			tc.server.handler.OnConnClosed(tc)
+			tc.server.callback.OnConnClosed(tc)
 		}
-
-		tc.server.groupsMu.Lock()
-		for _, group := range tc.server.groups {
-			delete(group, tc)
-		}
-		tc.server.groupsMu.Unlock()
 
 		tc.server.tcpConnsMu.Lock()
 		delete(tc.server.tcpConns, tc)
@@ -252,14 +247,6 @@ func (tc *tcpConn) readLoop() {
 		tc.sendChan <- nil
 	}()
 
-	if tc.server.opts.eventChan != nil {
-		tc.server.opts.eventChan <- func() {
-			tc.server.handler.OnNewConn(tc)
-		}
-	} else {
-		tc.server.handler.OnNewConn(tc)
-	}
-
 	var head [_headLen]byte
 	for {
 		tc.conn.SetReadDeadline(time.Now().Add(_readTimeout))
@@ -276,11 +263,11 @@ func (tc *tcpConn) readLoop() {
 
 		if tc.server.opts.eventChan != nil {
 			tc.server.opts.eventChan <- func() {
-				tc.server.handler.OnRecvData(tc, p.getData())
+				tc.server.callback.OnRecvData(tc, p.getData())
 				p.release()
 			}
 		} else {
-			tc.server.handler.OnRecvData(tc, p.getData())
+			tc.server.callback.OnRecvData(tc, p.getData())
 			p.release()
 		}
 	}
@@ -301,30 +288,6 @@ func (tc *tcpConn) Close() error {
 func (tc *tcpConn) serve() {
 	go tc.writeLoop()
 	tc.readLoop()
-}
-
-func (tc *tcpConn) AddToGroup(groupName string) {
-	tc.server.groupsMu.Lock()
-	defer tc.server.groupsMu.Unlock()
-
-	group, ok := tc.server.groups[groupName]
-	if !ok {
-		group = make(map[*tcpConn]struct{})
-		tc.server.groups[groupName] = group
-	}
-	group[tc] = struct{}{}
-}
-
-func (tc *tcpConn) RemoveFromGroup(groupName string) {
-	tc.server.groupsMu.Lock()
-	defer tc.server.groupsMu.Unlock()
-
-	group, ok := tc.server.groups[groupName]
-	if !ok {
-		return
-	}
-
-	delete(group, tc)
 }
 
 func (tc *tcpConn) SetUserData(userData interface{}) {

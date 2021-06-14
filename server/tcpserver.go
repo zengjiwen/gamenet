@@ -18,21 +18,17 @@ type tcpServer struct {
 	tcpConnsMu sync.Mutex
 	tcpConns   map[*tcpConn]struct{}
 
-	groupsMu sync.Mutex
-	groups   map[string]map[*tcpConn]struct{}
-
-	handler       gamenet.EventHandler
+	callback      gamenet.EventCallback
 	broadcastChan chan []byte
 
 	opts options
 }
 
-func newTCPServer(addr string, handler gamenet.EventHandler, applies ...func(opts *options)) *tcpServer {
+func newTCPServer(addr string, callback gamenet.EventCallback, applies ...func(opts *options)) *tcpServer {
 	ts := &tcpServer{
 		addr:          addr,
 		tcpConns:      make(map[*tcpConn]struct{}),
-		groups:        make(map[string]map[*tcpConn]struct{}),
-		handler:       handler,
+		callback:      callback,
 		broadcastChan: make(chan []byte, _broadcastBacklog),
 	}
 	for _, apply := range applies {
@@ -47,18 +43,7 @@ func (ts *tcpServer) ListenAndServe() error {
 		return err
 	}
 
-	go ts.broadcastLoop()
 	return ts.serve(ln)
-}
-
-func (ts *tcpServer) broadcastLoop() {
-	for data := range ts.broadcastChan {
-		ts.tcpConnsMu.Lock()
-		for conn := range ts.tcpConns {
-			conn.Send(data)
-		}
-		ts.tcpConnsMu.Unlock()
-	}
 }
 
 func (ts *tcpServer) serve(ln net.Listener) error {
@@ -83,10 +68,17 @@ func (ts *tcpServer) serve(ln net.Listener) error {
 			return err
 		}
 
-		tc := newTCPConn(c)
+		tc := newTCPConn(ts, c)
 		ts.tcpConnsMu.Lock()
 		ts.tcpConns[tc] = struct{}{}
 		ts.tcpConnsMu.Unlock()
+		if ts.opts.eventChan != nil {
+			ts.opts.eventChan <- func() {
+				ts.callback.OnNewConn(tc)
+			}
+		} else {
+			ts.callback.OnNewConn(tc)
+		}
 		go tc.serve()
 	}
 }
@@ -106,25 +98,4 @@ func (ts *tcpServer) Shutdown() error {
 	ts.tcpConnsMu.Unlock()
 	close(ts.broadcastChan)
 	return nil
-}
-
-func (ts *tcpServer) Broadcast(data []byte) {
-	defer func() {
-		recover()
-	}()
-	ts.broadcastChan <- data
-}
-
-func (ts *tcpServer) Multicast(groupName string, data []byte) {
-	ts.groupsMu.Lock()
-	defer ts.groupsMu.Unlock()
-
-	group, ok := ts.groups[groupName]
-	if !ok {
-		return
-	}
-
-	for conn := range group {
-		conn.Send(data)
-	}
 }
