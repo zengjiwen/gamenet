@@ -1,14 +1,12 @@
 # gamenet
 efficient and clear game net lib
 
-# support
+# feature
 1. TCP
-2. graceful shutdown
-3. broadcast
-4. multicast
-5. flush delay option
-6. user data
-7. concurrent callback
-8. serial callback
+2. using pool for reducing memory alloc
+3. graceful shutdown
+4. flush delay option
+5. user data
+6. support actor and csp mode
 
 in developing...
