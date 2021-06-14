@@ -1,7 +1,7 @@
 package server
 
 import (
-	"gamenet"
+	"github.com/zengjiwen/gamenet"
 	"net"
 	"sync"
 	"time"

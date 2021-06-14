@@ -2,8 +2,8 @@ package main
 
 import (
 	"fmt"
-	"gamenet"
-	"gamenet/server"
+	"github.com/zengjiwen/gamenet"
+	"github.com/zengjiwen/gamenet/server"
 	"os"
 	"os/signal"
 )
