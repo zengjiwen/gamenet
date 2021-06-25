@@ -11,9 +11,17 @@ efficient and clear game net lib
 
 in developing...
 
-example
+example:
 ```go
 package main
+
+import (
+	"fmt"
+	"github.com/zengjiwen/gamenet"
+	"github.com/zengjiwen/gamenet/server"
+	"os"
+	"os/signal"
+)
 
 func main() {
 	eventChan := make(chan func())
