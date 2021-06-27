@@ -25,7 +25,7 @@ import (
 
 func main() {
 	eventChan := make(chan func())
-	tcpServer := server.NewServer("tcp", "127.0.0.1:0", echoHandler{},
+	tcpServer := server.NewServer("tcp", "0.0.0.0:0", echoHandler{},
 		server.WithEventChan(eventChan))
 	go tcpServer.ListenAndServe()
 
