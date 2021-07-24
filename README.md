@@ -8,6 +8,7 @@ efficient and clear game net lib
 4. flush delay option
 5. user data
 6. support actor and csp mode
+7. rate limit
 
 in developing...
 

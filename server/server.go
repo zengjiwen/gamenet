@@ -6,7 +6,6 @@ import (
 	"strings"
 )
 
-// todo delete callback
 func NewServer(network, addr string, callback gamenet.EventCallback, applies ...func(opts *options)) gamenet.Server {
 	network = strings.ToLower(network)
 	switch network {

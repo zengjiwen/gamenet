@@ -2,6 +2,7 @@ package server
 
 import (
 	"bufio"
+	"container/list"
 	"encoding/binary"
 	"errors"
 	"io"
@@ -64,7 +65,8 @@ type tcpConn struct {
 	closing  int32
 	dieChan  chan struct{}
 
-	userData interface{}
+	userData    interface{}
+	packetTimes list.List
 }
 
 func newTCPConn(ts *tcpServer, c net.Conn) *tcpConn {
@@ -207,7 +209,12 @@ func (tc *tcpConn) writeLoop() {
 				return
 			}
 
-			binary.LittleEndian.PutUint32(headBuf[:], uint32(len(p)))
+			if tc.server.opts.littleEnd {
+				binary.LittleEndian.PutUint32(headBuf[:], uint32(len(p)))
+			} else {
+				binary.BigEndian.PutUint32(headBuf[:], uint32(len(p)))
+			}
+
 			if err := writeFull(tc.bufw, headBuf[:]); err != nil {
 				return
 			}
@@ -255,10 +262,30 @@ func (tc *tcpConn) readLoop() {
 			return
 		}
 
-		pLen := binary.LittleEndian.Uint32(head[:])
+		var pLen uint32
+		if tc.server.opts.littleEnd {
+			pLen = binary.LittleEndian.Uint32(head[:])
+		} else {
+			pLen = binary.BigEndian.Uint32(head[:])
+		}
+
 		p := newPacket(int(pLen))
 		if err := readFull(tc.bufr, p.getData()); err != nil {
 			return
+		}
+
+		if rateLimit := tc.server.opts.rateLimit; rateLimit != nil {
+			now := time.Now()
+			if tc.packetTimes.Len() < rateLimit.PacketCount {
+				tc.packetTimes.PushBack(now)
+			} else {
+				front := tc.packetTimes.Front()
+				if now.Sub(front.Value.(time.Time)) < rateLimit.Interval {
+					continue
+				}
+				front.Value = now
+				tc.packetTimes.MoveToBack(front)
+			}
 		}
 
 		if tc.server.opts.eventChan != nil {

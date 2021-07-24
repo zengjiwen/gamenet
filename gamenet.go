@@ -1,5 +1,7 @@
 package gamenet
 
+import "time"
+
 type Server interface {
 	ListenAndServe() error
 	Shutdown() error
@@ -16,4 +18,9 @@ type EventCallback interface {
 	OnNewConn(c Conn)
 	OnConnClosed(c Conn)
 	OnRecvData(c Conn, data []byte)
+}
+
+type RateLimit struct {
+	Interval    time.Duration
+	PacketCount int
 }

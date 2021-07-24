@@ -7,10 +7,6 @@ import (
 	"time"
 )
 
-const (
-	_broadcastBacklog = 50
-)
-
 type tcpServer struct {
 	addr string
 	ln   net.Listener
@@ -18,18 +14,15 @@ type tcpServer struct {
 	tcpConnsMu sync.Mutex
 	tcpConns   map[*tcpConn]struct{}
 
-	callback      gamenet.EventCallback
-	broadcastChan chan []byte
-
-	opts options
+	callback gamenet.EventCallback
+	opts     options
 }
 
 func newTCPServer(addr string, callback gamenet.EventCallback, applies ...func(opts *options)) *tcpServer {
 	ts := &tcpServer{
-		addr:          addr,
-		tcpConns:      make(map[*tcpConn]struct{}),
-		callback:      callback,
-		broadcastChan: make(chan []byte, _broadcastBacklog),
+		addr:     addr,
+		tcpConns: make(map[*tcpConn]struct{}),
+		callback: callback,
 	}
 	for _, apply := range applies {
 		apply(&ts.opts)
@@ -96,6 +89,5 @@ func (ts *tcpServer) Shutdown() error {
 	}
 	ts.tcpConns = nil
 	ts.tcpConnsMu.Unlock()
-	close(ts.broadcastChan)
 	return nil
 }

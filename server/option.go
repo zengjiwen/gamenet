@@ -1,6 +1,9 @@
 package server
 
-import "time"
+import (
+	"github.com/zengjiwen/gamenet"
+	"time"
+)
 
 type options struct {
 	eventChan       chan func()
@@ -9,6 +12,7 @@ type options struct {
 	maxFlushPackets int
 	headLen         int
 	littleEnd       bool
+	rateLimit       *gamenet.RateLimit
 }
 
 func WithEventChan(eventChan chan func()) func(opts *options) {
@@ -41,8 +45,14 @@ func WithHeadLen(headLen int) func(opts *options) {
 	}
 }
 
-func WithLittleEnd(littleEnd bool) func(opts *options) {
+func WithLittleEnd() func(opts *options) {
 	return func(opts *options) {
-		opts.littleEnd = littleEnd
+		opts.littleEnd = true
+	}
+}
+
+func WithRateLimit(rateLimit *gamenet.RateLimit) func(opts *options) {
+	return func(opts *options) {
+		opts.rateLimit = rateLimit
 	}
 }
