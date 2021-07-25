@@ -11,8 +11,8 @@ type tcpServer struct {
 	addr string
 	ln   net.Listener
 
-	tcpConnsMu sync.Mutex
-	tcpConns   map[*tcpConn]struct{}
+	mu       sync.Mutex
+	tcpConns map[*tcpConn]struct{}
 
 	callback gamenet.EventCallback
 	opts     options
@@ -62,9 +62,9 @@ func (ts *tcpServer) serve(ln net.Listener) error {
 		}
 
 		tc := newTCPConn(ts, c)
-		ts.tcpConnsMu.Lock()
+		ts.mu.Lock()
 		ts.tcpConns[tc] = struct{}{}
-		ts.tcpConnsMu.Unlock()
+		ts.mu.Unlock()
 		if ts.opts.eventChan != nil {
 			ts.opts.eventChan <- func() {
 				ts.callback.OnNewConn(tc)
@@ -77,17 +77,20 @@ func (ts *tcpServer) serve(ln net.Listener) error {
 }
 
 func (ts *tcpServer) Shutdown() error {
+	var err error
 	if ts.ln != nil {
-		if err := ts.ln.Close(); err != nil {
-			return err
-		}
+		err = ts.ln.Close()
 	}
 
-	ts.tcpConnsMu.Lock()
+	ts.mu.Lock()
 	for tc := range ts.tcpConns {
-		tc.Close()
+		if err == nil {
+			err = tc.Close()
+		} else {
+			tc.Close()
+		}
 	}
 	ts.tcpConns = nil
-	ts.tcpConnsMu.Unlock()
-	return nil
+	ts.mu.Unlock()
+	return err
 }

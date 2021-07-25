@@ -189,9 +189,9 @@ func (tc *tcpConn) writeLoop() {
 			tc.server.callback.OnConnClosed(tc)
 		}
 
-		tc.server.tcpConnsMu.Lock()
+		tc.server.mu.Lock()
 		delete(tc.server.tcpConns, tc)
-		tc.server.tcpConnsMu.Unlock()
+		tc.server.mu.Unlock()
 	}()
 
 	var headBuf [_headLen]byte
