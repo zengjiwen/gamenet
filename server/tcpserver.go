@@ -31,7 +31,7 @@ func newTCPServer(addr string, callback gamenet.EventCallback, applies ...func(o
 }
 
 func (ts *tcpServer) ListenAndServe() error {
-	ln, err := net.Listen("TCP", "127.0.0.1:0")
+	ln, err := net.Listen("TCP", ts.addr)
 	if err != nil {
 		return err
 	}
@@ -65,13 +65,15 @@ func (ts *tcpServer) serve(ln net.Listener) error {
 		ts.mu.Lock()
 		ts.tcpConns[tc] = struct{}{}
 		ts.mu.Unlock()
-		if ts.opts.eventChan != nil {
-			ts.opts.eventChan <- func() {
+
+		if eventChan := tc.server.opts.eventChan; eventChan != nil {
+			eventChan <- func() {
 				ts.callback.OnNewConn(tc)
 			}
 		} else {
 			ts.callback.OnNewConn(tc)
 		}
+
 		go tc.serve()
 	}
 }

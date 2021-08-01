@@ -181,10 +181,11 @@ func (tc *tcpConn) writeLoop() {
 		putBufw(tc.bufw)
 		close(tc.dieChan)
 		tc.conn.Close()
-		if tc.server.opts.eventChan != nil {
-			tc.server.opts.eventChan <- func() {
+		if eventChan := tc.server.opts.eventChan; eventChan != nil {
+			eventChan <- func() {
 				tc.server.callback.OnConnClosed(tc)
 			}
+			close(eventChan)
 		} else {
 			tc.server.callback.OnConnClosed(tc)
 		}
@@ -288,8 +289,8 @@ func (tc *tcpConn) readLoop() {
 			}
 		}
 
-		if tc.server.opts.eventChan != nil {
-			tc.server.opts.eventChan <- func() {
+		if eventChan := tc.server.opts.eventChan; eventChan != nil {
+			eventChan <- func() {
 				tc.server.callback.OnRecvData(tc, p.getData())
 				p.release()
 			}
